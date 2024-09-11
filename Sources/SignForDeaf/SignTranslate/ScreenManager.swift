@@ -7,7 +7,6 @@ class ScreenManager {
     
     init(parentViewController: UIViewController) {
         self.parentViewController = parentViewController
-        print(self.parentViewController)
     }
     
     public func showLoadingScreen() {
@@ -30,9 +29,6 @@ class ScreenManager {
             let imageView = UIImageView()
             if let image = UIImage(named: "logoHead", in: Bundle.module, compatibleWith: nil) {
                 imageView.image = image
-            } else {
-                print("Resim bulunamadı")
-                
             }
             imageView.contentMode = .scaleAspectFit
             imageView.translatesAutoresizingMaskIntoConstraints = false

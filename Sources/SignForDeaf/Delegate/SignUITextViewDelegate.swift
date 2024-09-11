@@ -8,8 +8,6 @@ public class SignUITextViewDelegate: NSObject, UITextViewDelegate {
     public override init() {
         if let parentViewController = UIApplication.topViewController() {
             loadingScreenManager = ScreenManager(parentViewController: parentViewController)
-        } else {
-            print("UIViewController yok. LoadingScreenManager oluşturulamadı.")
         }
         super.init()
     }
@@ -28,7 +26,7 @@ public class SignUITextViewDelegate: NSObject, UITextViewDelegate {
     private func createFullURL(baseURL: String?, videoName: String?) -> String? {
         guard let base = baseURL, !base.isEmpty,
               let name = videoName, !name.isEmpty else { return nil }
-        var videoUrl = "\(base)\(name)".replacingOccurrences(of: "http://", with: "https://")
+        let videoUrl = "\(base)\(name)".replacingOccurrences(of: "http://", with: "https://")
         return videoUrl
     }
     
@@ -37,8 +35,6 @@ public class SignUITextViewDelegate: NSObject, UITextViewDelegate {
             if let parentViewController = UIApplication.topViewController() {
                 loadingScreenManager = ScreenManager(parentViewController: parentViewController)
                 loadingScreenManager?.showLoadingScreen()
-            } else {
-                print("UIViewController yok. ScreenManager oluşturulamadı.")
             }
         } else {
             loadingScreenManager?.hideLoadingScreen()
@@ -51,8 +47,6 @@ public class SignUITextViewDelegate: NSObject, UITextViewDelegate {
             if let parentViewController = UIApplication.topViewController() {
                 loadingScreenManager = ScreenManager(parentViewController: parentViewController)
                 loadingScreenManager?.showErrorScreen()
-            } else {
-                print("UIViewController yok. ScreenManager oluşturulamadı.")
             }
         } else {
             loadingScreenManager?.hideLoadingScreen()
@@ -63,11 +57,11 @@ public class SignUITextViewDelegate: NSObject, UITextViewDelegate {
     private func customAction(for textView: UITextView) {
         loadingScreen()
         guard let selectedTextRange = textView.selectedTextRange else {
-                print("Metin seçilmedi.")
+                print("Text not selected.")
                 return
             }
         let selectedText = textView.text(in: selectedTextRange) ?? ""
-        print("Çevirilecek text seçildi: \(selectedText)")
+        print("Translate text: \(selectedText)")
         URLApiService.shared.getSignVideo(s: selectedText) { result in
             switch result {
             case .success(let signModel):
@@ -83,7 +77,7 @@ public class SignUITextViewDelegate: NSObject, UITextViewDelegate {
                     loadingScreen(open: false)
                     errorScreen()
                 }
-                print("Hata: \(error)")
+                print("Error: \(error)")
             }
         }
     }

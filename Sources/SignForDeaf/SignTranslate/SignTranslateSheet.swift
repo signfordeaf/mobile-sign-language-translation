@@ -34,9 +34,6 @@ class SignTranlatePageSheetView: UIViewController {
         
         if let image = UIImage(named: "logoHead", in: Bundle.module, compatibleWith: nil) {
             imageView.image = image
-            } else {
-                print("Resim bulunamadı")
-                
             }
             imageView.contentMode = .scaleAspectFit
             imageView.translatesAutoresizingMaskIntoConstraints = false
@@ -107,6 +104,7 @@ class SignTranlatePageSheetView: UIViewController {
         label.text = textToShow
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
+        label.numberOfLines = .zero
         
         view.addSubview(label)
         NSLayoutConstraint.activate([
