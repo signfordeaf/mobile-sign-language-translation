@@ -104,16 +104,38 @@ class SignTranlatePageSheetView: UIViewController {
         label.text = textToShow
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.numberOfLines = .zero
         
-        view.addSubview(label)
+        let labelWidth = label.frame.size.width
+        let viewWidth = view.frame.size.width
+        let labelHeight = label.frame.size.height
+        
+        if labelWidth > viewWidth {
+            label.frame = CGRect(x: viewWidth, y: 100, width: labelWidth, height: labelHeight)
+            view.addSubview(label)
+
+            startScrolling(label: label)
+        } else {
+            label.frame = CGRect(x: (viewWidth - labelWidth) / 2, y: 100, width: labelWidth, height: labelHeight)
+            view.addSubview(label)
+        }
         NSLayoutConstraint.activate([
             label.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -30),
             label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             label.heightAnchor.constraint(equalToConstant: 30)
         ])
+        
+        
     }
+    
+    func startScrolling(label: UILabel) {
+            let labelWidth = label.frame.size.width
+
+            UIView.animate(withDuration: 8.0, delay: 0.0, options: [.curveLinear, .repeat], animations: {
+                // Label'in sol tarafa kaydırılması
+                label.frame = CGRect(x: -labelWidth, y: label.frame.origin.y, width: labelWidth, height: label.frame.size.height)
+            }, completion: nil)
+        }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
