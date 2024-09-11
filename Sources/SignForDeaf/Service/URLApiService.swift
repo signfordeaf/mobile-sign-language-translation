@@ -32,7 +32,7 @@ class URLApiService {
             "language": language
         ]
         
-        guard var urlComponents = URLComponents(string: baseURL) else {
+        guard var urlComponents = URLComponents(string: "\(baseURL)/Translate") else {
             completion(.failure(.invalidURL))
             return
         }

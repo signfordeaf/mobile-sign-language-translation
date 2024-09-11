@@ -28,7 +28,8 @@ public class SignUITextViewDelegate: NSObject, UITextViewDelegate {
     private func createFullURL(baseURL: String?, videoName: String?) -> String? {
         guard let base = baseURL, !base.isEmpty,
               let name = videoName, !name.isEmpty else { return nil }
-        return "\(base)\(name)"
+        var videoUrl = "\(base)\(name)".replacingOccurrences(of: "http://", with: "https://")
+        return videoUrl
     }
     
     private func loadingScreen(open: Bool = true) {
