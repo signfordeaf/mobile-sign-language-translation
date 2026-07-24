@@ -60,3 +60,14 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# The example app (TestApp/) is tracked as a runnable demo — only its
+# user-specific state is ignored (see the rules below).
+
+# Xcode user-specific state (keep the TestApp project + shared scheme tracked)
+xcuserdata/
+*.xcuserstate
+TestApp/**/xcuserdata/
+
+# macOS
+.DS_Store
