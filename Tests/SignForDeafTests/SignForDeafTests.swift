@@ -36,12 +36,48 @@ final class SignForDeafTests: XCTestCase {
     func testConfigDefaults() {
         let config = SignForDeafConfig(apiKey: "KEY", apiUrl: "https://example.com")
         XCTAssertEqual(config.language, .turkish)
-        XCTAssertEqual(config.originUrl, "https://webplugin.signfordeaf.com")
-        XCTAssertEqual(config.fdid, "16")
-        XCTAssertEqual(config.tid, "23")
+        // v2: originUrl defaults to apiUrl when not given.
+        XCTAssertEqual(config.originUrl, "https://example.com")
+        // Default translator is Hesna; raw tid/fdid are nil overrides, and the
+        // effective ids come from the translator.
+        XCTAssertEqual(config.translator, .hesna)
+        XCTAssertNil(config.fdid)
+        XCTAssertNil(config.tid)
+        XCTAssertEqual(config.effectiveTid, "43")
+        XCTAssertEqual(config.effectiveFdid, "35")
         XCTAssertEqual(config.theme.primaryColor, "#6750A4")
         XCTAssertEqual(config.theme.textColor, "#1C1B1F")
+        XCTAssertEqual(config.theme.onPrimaryColor, "#FFFFFF")
+        XCTAssertEqual(config.theme.surfaceColor, "#FFFFFF")
+        XCTAssertEqual(config.theme.cornerRadius, 16)
         XCTAssertTrue(config.showFloatingButton)
+        // v2 defaults
+        XCTAssertEqual(config.granularity, .sentence)
+        XCTAssertEqual(config.maxSegmentChars, 900)
+        XCTAssertFalse(config.longPressToTranslate)
+        XCTAssertTrue(config.smartPassthrough)
+        XCTAssertFalse(config.autoEnable)
+        XCTAssertTrue(config.card.draggable)
+        XCTAssertEqual(config.card.initialCorner, .bottomRight)
+        XCTAssertEqual(config.card.avatarHeight, 240)
+        XCTAssertEqual(config.card.avatarMaxWidth, 212)
+        XCTAssertNil(config.card.placeholderAvatar)
+        XCTAssertFalse(config.card.showFeedback)
+        XCTAssertFalse(config.card.showContact)
+        XCTAssertTrue(config.card.showSpeed)
+        XCTAssertTrue(config.card.showLoop)
+        XCTAssertEqual(config.card.speeds, [1.0, 1.2, 1.5, 2.0])
+        XCTAssertEqual(config.card.defaultSpeed, 1.0)
+        XCTAssertTrue(config.card.defaultLooping)
+        XCTAssertTrue(config.accessibility.announceOnOpen)
+        XCTAssertFalse(config.accessibility.announceOnClose)
+    }
+
+    func testOriginUrlOverrideWins() {
+        let config = SignForDeafConfig(
+            apiKey: "K", apiUrl: "https://api.example.com",
+            originUrl: "https://origin.example.com")
+        XCTAssertEqual(config.originUrl, "https://origin.example.com")
     }
 
     // MARK: - Floating button config
@@ -86,10 +122,19 @@ final class SignForDeafTests: XCTestCase {
     func testTapToTranslateHintLocalized() {
         XCTAssertEqual(
             SignForDeafLanguage.turkish.strings.tapToTranslateHint,
-            "Çevirmek için bir yazıya dokunun")
+            "Cümlelere tıklayarak işaret dili çevirilerini başlatabilirsiniz.")
         XCTAssertEqual(
             SignForDeafLanguage.english.strings.tapToTranslateHint,
-            "Tap on any text to translate it")
+            "Tap a sentence to start its sign language translation.")
+    }
+
+    func testV2ControlLabelsLocalized() {
+        XCTAssertEqual(SignForDeafLanguage.turkish.strings.playLabel, "Oynat")
+        XCTAssertEqual(SignForDeafLanguage.turkish.strings.collapseLabel, "Küçült")
+        XCTAssertEqual(SignForDeafLanguage.english.strings.translationModeLabel,
+                       "Sign language translation mode")
+        XCTAssertEqual(SignForDeafLanguage.arabic.strings.loopLabel, "تكرار")
+        XCTAssertEqual(LocalizedStrings.sentenceCounter(index: 1, total: 5), "2 / 5")
     }
 
     // MARK: - SignModel

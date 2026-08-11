@@ -11,10 +11,16 @@ import SignForDeaf
 struct ContentView: View {
 
     // MARK: - Configuration state
-    @State private var apiKey: String = ""
-    @State private var apiUrl: String = "https://kor01rp02.signfordeaf.com"
-    @State private var originUrl: String = "https://webplugin.signfordeaf.com"
-    @State private var language: SignForDeafLanguage = .turkish
+    // Prefilled from the Run scheme's Environment Variables (Xcode → Edit Scheme →
+    // Run → Arguments)
+    @State private var apiKey: String = Env.string("SIGNFORDEAF_API_KEY") ?? ""
+    @State private var apiUrl: String =
+        Env.string("SIGNFORDEAF_API_URL") ?? ""
+    @State private var originUrl: String =
+        Env.string("SIGNFORDEAF_ORIGIN_URL") ?? ""
+    @State private var language: SignForDeafLanguage =
+        Env.string("SIGNFORDEAF_LANGUAGE").map(SignForDeafLanguage.init(from:)) ?? .turkish
+    @State private var translator: SignForDeafTranslator = .hesna
     @State private var themeHex: String = ThemePreset.presets[0].hex
     @State private var idleBehavior: SignForDeafIdleBehavior = .peek
     @State private var buttonSize: CGFloat = 44
@@ -22,6 +28,8 @@ struct ContentView: View {
     // MARK: - Live SDK state
     @State private var isConfigured = false
     @State private var isActive = false
+    @State private var swiftUIActivations = 0
+    @State private var uikitActivations = 0
     @StateObject private var blockLog = BlockLog()
 
     private let refresh = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
@@ -46,6 +54,7 @@ struct ContentView: View {
                 if isConfigured {
                     uikitCard
                     swiftUICard
+                    activateCard
                     controlsCard
                     sensitiveCard
                     eventsCard
@@ -60,7 +69,21 @@ struct ContentView: View {
             // Keep the "Active" pill in sync when the floating button toggles it.
             isActive = SignForDeaf.shared.isTapToTranslateActive
         }
-        .onAppear(perform: handleLaunchArguments)
+        .onAppear {
+            handleLaunchArguments()
+            autoConfigureIfNeeded()
+        }
+    }
+
+    /// When the Run scheme sets `SIGNFORDEAF_AUTOCONFIGURE=1` and a real API key,
+    /// configure + enable on launch — so pressing Run in Xcode just works, like
+    /// the Flutter example's launch config.
+    private func autoConfigureIfNeeded() {
+        guard !isConfigured,
+              Env.bool("SIGNFORDEAF_AUTOCONFIGURE"),
+              !apiKey.isEmpty, apiKey != "xxx"
+        else { return }
+        configure()
     }
 
     // MARK: - Header
@@ -112,6 +135,18 @@ struct ContentView: View {
                     Picker("Language", selection: $language) {
                         ForEach(SignForDeafLanguage.allCases, id: \.self) { lang in
                             Text(lang.displayName).tag(lang)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(Brand.color)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    fieldLabel("Translator")
+                    Picker("Translator", selection: $translator) {
+                        ForEach(SignForDeafTranslator.allCases, id: \.self) { t in
+                            Text(t.rawValue.capitalized).tag(t)
                         }
                     }
                     .pickerStyle(.menu)
@@ -187,11 +222,11 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sampleCaption("UILabel")
                 LabelRepresentable(text: sampleShort)
-                    .frame(height: 44)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Divider()
                 sampleCaption("UITextView")
                 PlainTextViewRepresentable(text: sampleLong)
-                    .frame(height: 64)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -209,6 +244,44 @@ struct ContentView: View {
                 Text(sampleShort)
                     .signTranslatable(sampleShort)
                     .font(.body)
+                Divider()
+                // Plain SwiftUI Text with NO wrapper — reached via the
+                // accessibility fallback (accessibilityTextFallback).
+                sampleCaption("Plain Text(…) — no wrapper")
+                Text(sampleShort)
+                    .font(.body)
+            }
+        }
+    }
+
+    // MARK: - Long-press to activate
+
+    /// Demonstrates the `longPressToActivate` behavior: with the menu open, a
+    /// **tap** on a labelled button translates its label, while a **long press**
+    /// runs the button. The SwiftUI button uses the release-the-claim fallback;
+    /// the UIKit button is fired directly (`UIControl.sendActions`).
+    private var activateCard: some View {
+        Card(number: "4", title: "Long-press to activate") {
+            VStack(alignment: .leading, spacing: 12) {
+                sampleCaption("Menu open → tap = translate, long press = run")
+                Button {
+                    swiftUIActivations += 1
+                } label: {
+                    Text("Kabul ediyorum (SwiftUI)")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Brand.color.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                Text("SwiftUI activations: \(swiftUIActivations)")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                Divider()
+
+                UIKitButton(title: "Onayla (UIKit)") { uikitActivations += 1 }
+                    .frame(height: 44)
+                Text("UIKit activations: \(uikitActivations)")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -216,7 +289,7 @@ struct ContentView: View {
     // MARK: - Controls
 
     private var controlsCard: some View {
-        Card(number: "4", title: "Controls") {
+        Card(number: "5", title: "Controls") {
             VStack(spacing: 10) {
                 ControlButton(title: "Toggle tap-to-translate",
                               systemImage: "hand.tap.fill", tint: Brand.color) {
@@ -249,7 +322,7 @@ struct ContentView: View {
     // MARK: - Sensitive content
 
     private var sensitiveCard: some View {
-        Card(number: "5", title: "Sensitive data protection") {
+        Card(number: "6", title: "Sensitive data protection") {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Personal data is never sent to the server. Mark content with "
                     + ".signSensitive / isSignForDeafSensitive, and common PII "
@@ -266,12 +339,12 @@ struct ContentView: View {
                 Divider()
                 sampleCaption("isSignForDeafSensitive")
                 LabelRepresentable(text: sampleMarkedNote, sensitive: true)
-                    .frame(height: 44)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 Divider()
                 sampleCaption("Auto-detected — UILabel")
                 LabelRepresentable(text: sampleCard)
-                    .frame(height: 64)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 ControlButton(title: "Try to translate the card number",
                               systemImage: "nosign", tint: Brand.color) {
@@ -283,7 +356,7 @@ struct ContentView: View {
     }
 
     private var eventsCard: some View {
-        Card(number: "6", title: "Blocked events") {
+        Card(number: "7", title: "Blocked events") {
             VStack(alignment: .leading, spacing: 10) {
                 Text("onSensitiveBlocked fires for every blocked translation — no request is sent.")
                     .font(.footnote)
@@ -337,20 +410,33 @@ struct ContentView: View {
             SignForDeafConfig(
                 apiKey: apiKey.isEmpty ? "demo" : apiKey,
                 apiUrl: apiUrl,
-                originUrl: originUrl,
+                originUrl: originUrl.isEmpty ? nil : originUrl,
                 language: language,
+                // Picking a translator sets tid/fdid; the env vars stay as
+                // optional overrides (nil unless set).
+                translator: translator,
+                fdid: Env.string("SIGNFORDEAF_FDID"),
+                tid: Env.string("SIGNFORDEAF_TID"),
                 theme: SignForDeafTheme(primaryColor: themeHex),
                 floatingButton: SignForDeafFloatingButtonConfig(
                     size: buttonSize,
                     activeBackgroundColor: themeHex,
                     idleBehavior: idleBehavior
-                )
+                ),
+                // Menu open: a tap on a labelled control translates its label; a
+                // long press runs the control instead of collapsing the player.
+                longPressToActivate: true,
+                // Let SwiftUI buttons (whose text isn't a UILabel) translate via
+                // their accessibility label.
+                accessibilityTextFallback: true
             )
         )
         // Mirror the Flutter example's event log: record every blocked translation.
         SignForDeaf.shared.onSensitiveBlocked = { [weak blockLog] text in
             DispatchQueue.main.async { blockLog?.add(text) }
         }
+        // v2 is off by default — turn it on so the floating button appears.
+        SignForDeaf.shared.enable()
         isConfigured = true
         isActive = SignForDeaf.shared.isTapToTranslateActive
     }
@@ -365,6 +451,7 @@ struct ContentView: View {
             SignForDeafConfig(apiKey: "demo", apiUrl: apiUrl, originUrl: originUrl,
                               language: language,
                               theme: SignForDeafTheme(primaryColor: themeHex)))
+        SignForDeaf.shared.enable()
         isConfigured = true
 
         if args.contains("-activedemo") {
@@ -377,6 +464,21 @@ struct ContentView: View {
                 SignForDeaf.shared.translate(sampleLong)
             }
         }
+    }
+}
+
+// MARK: - Environment (Run scheme variables — the iOS analogue of --dart-define)
+
+private enum Env {
+    /// A non-empty environment variable value, or `nil`.
+    static func string(_ key: String) -> String? {
+        guard let value = ProcessInfo.processInfo.environment[key], !value.isEmpty else { return nil }
+        return value
+    }
+
+    static func bool(_ key: String) -> Bool {
+        guard let value = string(key)?.lowercased() else { return false }
+        return value == "1" || value == "true" || value == "yes"
     }
 }
 
@@ -409,6 +511,7 @@ private struct ThemePreset: Identifiable {
         ThemePreset(name: "Green", hex: "#16A34A"),
         ThemePreset(name: "Pink", hex: "#DB2777"),
         ThemePreset(name: "Orange", hex: "#EA580C"),
+        ThemePreset(name: "Ink", hex: "#1C1B1F"),
     ]
 }
 
@@ -504,6 +607,35 @@ private struct ControlButton: View {
 
 // MARK: - UIKit bridges
 
+/// A real UIKit `UIButton` so the long-press-to-activate demo can exercise the
+/// direct `UIControl.sendActions` path (SwiftUI buttons take the fallback path).
+private struct UIKitButton: UIViewRepresentable {
+    let title: String
+    let action: () -> Void
+
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 16)
+        button.backgroundColor = UIColor.tertiarySystemGroupedBackground
+        button.layer.cornerRadius = 10
+        button.addAction(UIAction { _ in context.coordinator.action() }, for: .touchUpInside)
+        return button
+    }
+
+    func updateUIView(_ uiView: UIButton, context: Context) {
+        context.coordinator.action = action
+        uiView.setTitle(title, for: .normal)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+
+    final class Coordinator {
+        var action: () -> Void
+        init(action: @escaping () -> Void) { self.action = action }
+    }
+}
+
 private struct PlainTextViewRepresentable: UIViewRepresentable {
     let text: String
     func makeUIView(context: Context) -> UITextView {
@@ -511,9 +643,12 @@ private struct PlainTextViewRepresentable: UIViewRepresentable {
         tv.text = text
         tv.isEditable = false
         tv.isSelectable = false
+        tv.isScrollEnabled = false // wrap and grow vertically instead of asserting a wide intrinsic width
         tv.font = .systemFont(ofSize: 16)
         tv.backgroundColor = .clear
         tv.textContainerInset = .zero
+        tv.textContainer.lineFragmentPadding = 0
+        tv.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return tv
     }
     func updateUIView(_ uiView: UITextView, context: Context) { uiView.text = text }
@@ -528,10 +663,17 @@ private struct LabelRepresentable: UIViewRepresentable {
         label.numberOfLines = 0
         label.font = .systemFont(ofSize: 16)
         label.isSignForDeafSensitive = sensitive
+        // Don't let the label's single-line intrinsic width blow out the SwiftUI
+        // layout — wrap within the available width instead (card = 16 outer + 16
+        // inner padding per side).
+        label.preferredMaxLayoutWidth = UIScreen.main.bounds.width - 64
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
         return label
     }
     func updateUIView(_ uiView: UILabel, context: Context) {
         uiView.text = text
+        uiView.preferredMaxLayoutWidth = UIScreen.main.bounds.width - 64
         uiView.isSignForDeafSensitive = sensitive
     }
 }

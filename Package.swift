@@ -14,9 +14,13 @@ let package = Package(
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // The logo is drawn as a vector (LogoView), so no bundled resources are needed.
+        // The logo is drawn as a vector (LogoView); the bundled idle-signer clips
+        // are shipped as processed resources, loaded via `Bundle.module`.
         .target(
-            name: "SignForDeaf"),
+            name: "SignForDeaf",
+            resources: [
+                .process("Resources/videos"),
+            ]),
         .testTarget(
             name: "SignForDeafTests",
             dependencies: ["SignForDeaf"]),
