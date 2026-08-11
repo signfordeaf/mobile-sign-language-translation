@@ -1,16 +1,25 @@
 # SignForDeaf
 
 A native iOS SDK that adds **sign language translation** to any app. It shows a
-floating, AssistiveTouch‑style button on screen; tapping it turns on
-“tap‑to‑translate” mode, and a single tap on any text then plays its sign
-language translation video in a native bottom sheet.
+floating, AssistiveTouch‑style button; tapping it opens a small **corner player**
+and turns on “tap‑to‑translate” mode. A single tap on a sentence then plays its
+sign language translation — **without taking the app away**: no scrim, the page
+stays readable and tappable throughout.
 
-- 🎯 Floating, draggable, edge‑sticky button that toggles tap‑to‑translate mode
-- 👆 Tap any text while active → instant translation (`UILabel`, `UITextField`, `UITextView`, SwiftUI `Text`)
-- 📱 Native bottom‑sheet video player (AVKit) with loading, error/retry and a marquee caption
+> **v2.0** is a behavior change, not an API rewrite — see the
+> [CHANGELOG](CHANGELOG.md). The SDK is now **off by default**: call
+> `SignForDeaf.shared.enable()` after configuring. The full platform‑independent
+> spec lives in [`docs/`](docs).
+
+- 🎯 Floating, draggable, edge‑sticky button; the player opens on its docked side
+- 👆 Tap a **sentence** while active → translation. Reads `UILabel`, `UITextView`, `UIButton` titles, and — with `accessibilityTextFallback` — **SwiftUI `Text` and buttons** too; or opt in explicitly with `signTranslatable` / `SignText`
+- ✋ **Long‑press to activate**: with the menu open, tap a labelled control to translate it, long‑press to run it (`longPressToActivate`)
+- 🧑‍🏫 Pick the signer with `translator` (Kadir / Hesna / Jason / Owais); the backend can override it mid‑session
+- 🪟 Non‑modal **corner player** (AVFoundation): idle signer loop, control bar below the video, auto‑scrolling caption, collapse/close
+- ⚡ 40‑entry cache + one‑sentence‑ahead prefetch; declines taps it shouldn't claim so buttons still work
 - 🌍 3 languages: Turkish, English, Arabic
-- 🎨 Themeable (`primaryColor`, `textColor`)
-- 🔒 Sensitive‑information filtering — never sends PII (email, TR IBAN/GSM/TCKN, cards) or app‑marked text to the backend
+- 🎨 Themeable (`primaryColor`, `textColor`, `onPrimaryColor`, `surfaceColor`, `cornerRadius`) with WCAG contrast enforcement
+- 🔒 Sensitive‑information filtering — never sends PII (email, TR IBAN/GSM/TCKN, cards) or app‑marked text, per sentence
 - 🧩 Works with **UIKit** and **SwiftUI**
 - ♿ VoiceOver / accessibility support
 - 📦 Zero third‑party dependencies — Apple frameworks only
@@ -41,7 +50,7 @@ SignForDeaf is distributed as a Swift Package.
 dependencies: [
     .package(
         url: "https://github.com/signfordeaf/MobileSignLanguageTranslation.git",
-        from: "1.1.0"
+        from: "2.0.0"
     )
 ],
 targets: [
@@ -59,6 +68,15 @@ targets: [
 Configure the SDK **once**, at the root of your app. From then on the floating
 button and tap‑to‑translate work everywhere — no per‑screen setup.
 
+> ### ⚠️ Using SwiftUI? Turn on `accessibilityTextFallback: true`
+>
+> SwiftUI draws `Text` into its own layer instead of a `UILabel`, so the SDK
+> can't see it by default and **SwiftUI text won't translate** without this flag.
+> With it on, every on‑screen SwiftUI `Text` and button label translates on tap —
+> no per‑view wrapping. It's **off by default** because it also makes SwiftUI
+> **icon buttons** translate their accessibility label on tap (run them with a
+> long press or by collapsing the player). Pure‑UIKit apps don't need it.
+
 ### SwiftUI
 
 ```swift
@@ -71,10 +89,12 @@ struct MyApp: App {
         SignForDeaf.shared.configure(
             SignForDeafConfig(
                 apiKey: "YOUR_API_KEY",
-                apiUrl: "https://kor01rp02.signfordeaf.com",
-                language: .english
+                apiUrl: "https://YOUR_API_HOST",
+                language: .english,
+                accessibilityTextFallback: true   // required for SwiftUI text to translate
             )
         )
+        SignForDeaf.shared.enable()   // v2: the SDK is off until you enable it
     }
 
     var body: some Scene {
@@ -97,23 +117,31 @@ func application(
     SignForDeaf.shared.configure(
         SignForDeafConfig(
             apiKey: "YOUR_API_KEY",
-            apiUrl: "https://kor01rp02.signfordeaf.com",
+            apiUrl: "https://YOUR_API_HOST",
             language: .english,
             theme: SignForDeafTheme(primaryColor: "#6750A4", textColor: "#1C1B1F")
         )
     )
+    SignForDeaf.shared.enable()   // v2: the SDK is off until you enable it
     return true
 }
 ```
 
 ## The floating button & tap‑to‑translate
 
-After `configure`, a floating logo button appears on the right edge. It drags
-anywhere and sticks to the nearest edge, tucking partly off‑screen when idle.
+After `configure` + `enable`, a floating logo button appears on the right edge.
+It drags anywhere and sticks to the nearest edge, tucking partly off‑screen when
+idle. Its resting place survives the player opening and closing.
 
-- **Tap the button** → tap‑to‑translate mode turns ON (the button fills with `primaryColor`).
-- **Tap any text** while active → its translation plays in the bottom sheet.
-- **Tap the button again** → mode turns OFF.
+- **Tap the button** → the corner player opens and tap‑to‑translate turns ON.
+- **Tap a sentence** while active → its translation plays in the corner player,
+  with the app underneath still usable. A labelled control is *read*; an
+  unlabelled one still operates.
+- **Long‑press a labelled control** (when `longPressToActivate` is on) → runs the
+  control instead of translating, so you can operate the app without collapsing
+  the player.
+- **Collapse** (⌄) folds the player to a single bar and hands every tap back;
+  **close** (✕) returns to the floating button.
 
 Control it from code:
 
@@ -130,9 +158,26 @@ yourself.
 
 ## SwiftUI text
 
-SwiftUI draws `Text` rather than backing it with a `UILabel`, so pass the source
-string explicitly with the modifier or the drop‑in view. Like UIKit text, it
-translates on a **single tap while tap‑to‑translate mode is active**:
+SwiftUI draws `Text` into its own layer rather than backing it with a `UILabel`,
+so global hit testing can't see it directly. Two ways to translate it:
+
+**Automatic** — turn on `accessibilityTextFallback`. Any on‑screen SwiftUI `Text`
+and button label is then reached through the accessibility layer and translates
+on a single tap, just like UIKit text (images and sliders are excluded):
+
+```swift
+SignForDeaf.shared.configure(
+    SignForDeafConfig(
+        apiKey: "YOUR_API_KEY",
+        apiUrl: "https://YOUR_API_HOST",
+        accessibilityTextFallback: true
+    )
+)
+```
+
+**Explicit** — pass the source string with the modifier or the drop‑in view. Use
+this where you want a guaranteed exact source, or where custom drawing makes the
+accessibility label unreliable:
 
 ```swift
 Text("Hello world").signTranslatable("Hello world")
@@ -192,7 +237,7 @@ Tune it in the config — turn filtering off, or add your own patterns:
 SignForDeaf.shared.configure(
     SignForDeafConfig(
         apiKey: "YOUR_API_KEY",
-        apiUrl: "https://kor01rp02.signfordeaf.com",
+        apiUrl: "https://YOUR_API_HOST",
         sensitiveFilteringEnabled: true,           // default; set false to disable
         sensitivePatterns: [#"\bEMP-\d{6}\b"#]      // extra regexes, e.g. employee IDs
     )
@@ -215,19 +260,42 @@ SignForDeaf.shared.isEnabled   // current state (read-only)
 | -------------------- | ---------------------- | ---------------------- | --------------------------------------------- |
 | `apiKey`             | `String`               | — (required)           | API key, sent as `rk`.                        |
 | `apiUrl`             | `String`               | — (required)           | Translation API base URL.                     |
-| `originUrl`          | `String`               | `https://webplugin.signfordeaf.com` | Sent as the `url` query param and the `Origin` header. |
+| `originUrl`          | `String?`              | `nil` → `apiUrl`       | Sent as the `url` query param and the `Origin` header. |
 | `language`           | `SignForDeafLanguage`  | `.turkish`             | UI language & translation language code.      |
-| `fdid`               | `String`               | `"16"`                 | Form / dictionary ID.                         |
-| `tid`                | `String`               | `"23"`                 | Translator ID.                                |
+| `translator`         | `SignForDeafTranslator`| `.hesna`               | Signer whose `tid`/`fdid` are used and whose avatar shows first. |
+| `fdid`               | `String?`              | `nil` → translator's   | Optional `fdid` override.                     |
+| `tid`                | `String?`              | `nil` → translator's   | Optional `tid` override.                      |
 | `theme`              | `SignForDeafTheme`     | `#6750A4` / `#1C1B1F`  | `primaryColor` and `textColor` (hex strings). |
 | `showFloatingButton` | `Bool`                 | `true`                 | Show the floating button automatically.       |
 | `floatingButton`     | `SignForDeafFloatingButtonConfig` | defaults    | Floating button appearance & behavior (below). |
+| `longPressToActivate`| `Bool`                 | `false`                | Long‑press a labelled control to run it (tap still translates). |
+| `accessibilityTextFallback` | `Bool`          | `false`                | Translate SwiftUI text/buttons via the accessibility layer. |
+| `longPressToTranslate` | `Bool`               | `false`                | Long‑press to translate host‑made‑tappable text. |
+| `smartPassthrough`   | `Bool`                 | `true`                 | Hand taps the SDK shouldn't claim back to the app. |
+| `granularity`        | `SignForDeafGranularity` | `.sentence`          | Translate a sentence or the whole paragraph.  |
+| `autoEnable`         | `Bool`                 | `false`                | Enable the SDK automatically after `configure`. |
 | `sensitiveFilteringEnabled` | `Bool`          | `true`                 | Block sensitive text before it is sent (see [Sensitive‑information filtering](#sensitive-information-filtering)). |
 | `sensitivePatterns`  | `[String]`             | `[]`                   | Extra regex patterns that mark text as sensitive. |
 
 ### Languages
 
 `SignForDeafLanguage`: `.turkish`, `.english`, `.arabic`.
+
+### Signer / translator
+
+Pick who signs with `translator` — one of `.kadir`, `.hesna` (default), `.jason`,
+`.owais`. The choice supplies the `tid`/`fdid` sent with every request and the
+avatar shown on first launch; set `tid:`/`fdid:` only to override a specific id.
+If the backend returns a different signer with a translation, that signer is
+adopted mid‑session and shown from then on.
+
+```swift
+SignForDeafConfig(
+    apiKey: "YOUR_API_KEY",
+    apiUrl: "https://YOUR_API_HOST",
+    translator: .jason
+)
+```
 
 ### Theme
 
@@ -248,7 +316,7 @@ theme’s `primaryColor`.
 SignForDeaf.shared.configure(
     SignForDeafConfig(
         apiKey: "YOUR_API_KEY",
-        apiUrl: "https://kor01rp02.signfordeaf.com",
+        apiUrl: "https://YOUR_API_HOST",
         floatingButton: SignForDeafFloatingButtonConfig(
             size: 52,
             activeBackgroundColor: "#6750A4",
@@ -275,8 +343,9 @@ SignForDeaf.shared.configure(
 
 A runnable demo lives in [`TestApp/`](TestApp). Open
 `TestApp/TestApp.xcodeproj` in Xcode and run it on a simulator or device. It
-lets you enter an API key, pick a language and theme color, then try
-tap‑to‑translate on UIKit and SwiftUI text and drive every SDK control.
+lets you enter an API key, pick a language, translator and theme color, then try
+tap‑to‑translate on UIKit and SwiftUI text, exercise long‑press‑to‑activate on
+UIKit and SwiftUI buttons, and drive every SDK control.
 
 ## Changelog
 
